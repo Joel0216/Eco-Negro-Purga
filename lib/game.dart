@@ -18,6 +18,11 @@ class EcoNegroGame extends FlameGame with HasCollisionDetection {
   final double maxHealth = 100.0;
   final double maxEnergy = 100.0;
   
+  // Sistema de recarga de emergencia
+  bool energyDepleted = false;
+  double energyDepletedTimer = 0.0;
+  final double energyRechargeTime = 60.0; // 60 segundos
+  
   // Sistema de rondas
   int currentRound = 1;
   int minionsToSpawnThisRound = 0;
@@ -29,6 +34,7 @@ class EcoNegroGame extends FlameGame with HasCollisionDetection {
   // Sujetos Fallidos (cada 5 rondas)
   bool failedSubjectSpawned = false;
   FailedSubject? currentFailedSubject;
+  int failedSubjectsDefeated = 0; // Contador de jefes derrotados
   
   // Spawning de enemigos
   double spawnTimer = 0.0;
@@ -95,6 +101,21 @@ class EcoNegroGame extends FlameGame with HasCollisionDetection {
   void update(double dt) {
     super.update(dt);
     
+    // Sistema de recarga de emergencia
+    if (playerEnergy <= 0 && !energyDepleted) {
+      energyDepleted = true;
+      energyDepletedTimer = 0.0;
+    }
+    
+    if (energyDepleted) {
+      energyDepletedTimer += dt;
+      if (energyDepletedTimer >= energyRechargeTime) {
+        playerEnergy = 20.0; // Recarga 20 de energía
+        energyDepleted = false;
+        energyDepletedTimer = 0.0;
+      }
+    }
+    
     // Iniciar primera ronda si no está en progreso
     if (!roundInProgress && !waitingForNextRound) {
       _startRound();
@@ -154,19 +175,13 @@ class EcoNegroGame extends FlameGame with HasCollisionDetection {
     roundInProgress = false;
     waitingForNextRound = true;
     
-    // Curar 20% de la vida actual (con redondeo correcto)
-    final healPercent = playerHealth * 0.2;
-    final decimal = healPercent - healPercent.floor();
-    double healAmount;
-    
-    if (decimal >= 0.6) {
-      healAmount = healPercent.ceil().toDouble();
-    } else if (decimal <= 0.5) {
-      healAmount = healPercent.floor().toDouble();
-    } else {
-      healAmount = healPercent.round().toDouble();
+    // Incrementar contador de jefes derrotados si había un jefe
+    if (failedSubjectSpawned) {
+      failedSubjectsDefeated++;
     }
     
+    // Curar 20% de la vida actual
+    final healAmount = playerHealth * 0.2;
     playerHealth = min(maxHealth, playerHealth + healAmount);
     
     // La energía se mantiene de la ronda anterior
@@ -209,7 +224,16 @@ class EcoNegroGame extends FlameGame with HasCollisionDetection {
       spawnPos = Vector2(arenaWidth / 2, arenaHeight / 2);
     }
 
-    currentFailedSubject = FailedSubject(target: player);
+    // Calcular HP del jefe: 5 golpes base (250 HP) + 1 golpe adicional (50 HP) por cada jefe anterior
+    // Ronda 5 (1er jefe): 250 HP = 5 golpes
+    // Ronda 10 (2do jefe): 300 HP = 6 golpes
+    // Ronda 15 (3er jefe): 350 HP = 7 golpes, etc.
+    final bossHP = 250.0 + (failedSubjectsDefeated * 50.0);
+    
+    currentFailedSubject = FailedSubject(
+      target: player,
+      health: bossHP,
+    );
     currentFailedSubject!.position = spawnPos;
     world.add(currentFailedSubject!);
   }
@@ -271,7 +295,11 @@ class EcoNegroGame extends FlameGame with HasCollisionDetection {
   }
 
   void collectCore() {
-    playerEnergy = (playerEnergy + 30).clamp(0, maxEnergy);
+    playerEnergy = (playerEnergy + 20).clamp(0, maxEnergy);
+    if (energyDepleted && playerEnergy > 0) {
+      energyDepleted = false;
+      energyDepletedTimer = 0.0;
+    }
   }
 
   void useScream() {

@@ -73,6 +73,66 @@ class HUDOverlay extends StatelessWidget {
                     ),
                   ],
                 ),
+                // Cronómetro de recarga de energía
+                StreamBuilder<bool>(
+                  stream: Stream.periodic(
+                    const Duration(milliseconds: 100),
+                    (_) => game.energyDepleted,
+                  ),
+                  builder: (context, snapshot) {
+                    final depleted = snapshot.data ?? game.energyDepleted;
+                    if (!depleted) return const SizedBox.shrink();
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: StreamBuilder<double>(
+                        stream: Stream.periodic(
+                          const Duration(milliseconds: 100),
+                          (_) => game.energyDepletedTimer,
+                        ),
+                        builder: (context, timerSnapshot) {
+                          final timer = timerSnapshot.data ?? game.energyDepletedTimer;
+                          final remaining = (game.energyRechargeTime - timer).clamp(0, game.energyRechargeTime);
+                          final progress = timer / game.energyRechargeTime;
+                          
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Recarga: ${remaining.toInt()}s',
+                                style: const TextStyle(
+                                  color: Colors.yellow,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 150,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[800],
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.yellow, width: 1),
+                                ),
+                                child: FractionallySizedBox(
+                                  alignment: Alignment.centerLeft,
+                                  widthFactor: progress.clamp(0.0, 1.0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.yellow,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -168,50 +228,68 @@ class HUDOverlay extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Barra de vida del Sujeto Corrupto (si existe)
+                    // Alarma del Sujeto Corrupto (si existe)
                     if (game.failedSubjectSpawned && game.currentFailedSubject != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 10),
-                        child: StreamBuilder<double>(
+                        child: StreamBuilder<bool>(
                           stream: Stream.periodic(
                             const Duration(milliseconds: 100),
-                            (_) => game.currentFailedSubject?.health ?? 0,
+                            (_) => game.currentFailedSubject?.isMounted ?? false,
                           ),
                           builder: (context, snapshot) {
                             final failedSubject = game.currentFailedSubject;
                             if (failedSubject == null || !failedSubject.isMounted) {
                               return const SizedBox.shrink();
                             }
-                            final health = failedSubject.health;
-                            final maxHealth = failedSubject.maxHealth;
-                            return Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withAlpha(180),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.red, width: 2),
-                              ),
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'SUJETO CORRUPTO',
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
+                            return TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              duration: const Duration(milliseconds: 500),
+                              builder: (context, value, child) {
+                                return Opacity(
+                                  opacity: 0.5 + (value * 0.5),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withAlpha(180),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.red, width: 3),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.red.withAlpha(128),
+                                          blurRadius: 10,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.warning,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Text(
+                                          '⚠️ SUJETO CORRUPTO ⚠️',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Icon(
+                                          Icons.warning,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  SizedBox(
-                                    width: 200,
-                                    child: _buildBar(
-                                      health / maxHealth,
-                                      Colors.red,
-                                      '${health.toInt()}/${maxHealth.toInt()}',
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -332,7 +410,7 @@ class PauseMenu extends StatelessWidget {
       color: Colors.black.withAlpha(204),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.all(40),
+          padding: const EdgeInsets.all(30),
           decoration: BoxDecoration(
             color: Colors.grey[900],
             borderRadius: BorderRadius.circular(20),
@@ -345,18 +423,18 @@ class PauseMenu extends StatelessWidget {
                 'PAUSA',
                 style: TextStyle(
                   color: Colors.cyan,
-                  fontSize: 48,
+                  fontSize: 36,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
               _MenuButton(
                 text: 'Reanudar',
                 icon: Icons.play_arrow,
                 color: Colors.green,
                 onPressed: () => game.togglePause(),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
               _MenuButton(
                 text: 'Reintentar',
                 icon: Icons.refresh,
@@ -367,7 +445,7 @@ class PauseMenu extends StatelessWidget {
                   game.resumeEngine();
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
               _MenuButton(
                 text: 'Salir',
                 icon: Icons.exit_to_app,
@@ -473,17 +551,17 @@ class _MenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon, size: 28),
+      icon: Icon(icon, size: 20),
       label: Text(
         text,
-        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );

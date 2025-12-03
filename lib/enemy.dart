@@ -229,10 +229,12 @@ class Alpha extends Enemy {
 
 
 class FailedSubject extends Enemy {
-  FailedSubject({required super.target})
-      : super(
-          health: 150,
-          maxHealth: 150,
+  FailedSubject({
+    required super.target,
+    double health = 100.0,
+  }) : super(
+          health: health,
+          maxHealth: health,
           speed: 70,
           damage: 20, // 20 de daño por segundo
           size: Vector2.all(40),
